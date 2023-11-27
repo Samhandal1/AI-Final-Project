@@ -51,13 +51,26 @@ class StudentAgent(Agent):
             "l": 3,
         }
 
+        # Define moves (Up, Right, Down, Left)
+        moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
 
         # Some simple code to help you with timing. Consider checking 
         # time_taken during your search and breaking with the best answer
         # so far when it nears 2 seconds.
         start_time = time.time()
 
+
+        # Check that players are not randomly positioned in same cell
+        # Only do at the very beginning, not before every step
+        if (my_pos[0] == adv_pos[1] and my_pos[1] == adv_pos[1]) :
+            return False
+
         # logic goes here
+        
+        # Get list of all possible moves (use check_valid_step and check for barriers)
+        # Simulate wall placement for all possible moves
+        # Evaluate moves with minimax and choose best one (make sure we dont end up in an immediate loss)
+        # Check if game has ended with check_endgame
 
 
         time_taken = time.time() - start_time
@@ -67,20 +80,82 @@ class StudentAgent(Agent):
         # dummy return
         return my_pos, self.dir_map["u"]
 
+    def generate_potential_moves(self, start_pos, chess_board, max_step):
+        """
+        Generate a list of potential moves from the current position.
 
-    def BFS(self, chess_board, my_pos, adv_pos, max_step) :
+        Parameters
+        ----------
+        start_pos : tuple
+            The start position of the agent (x, y).
+        chess_board : np.ndarray
+            The chess board state.
+        max_step : int
+            The maximum number of steps the agent can move.
 
-        # Moves (Up, Right, Down, Left) 
-        # (0, 1, 2, 3)
-        moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
+        Returns
+        -------
+        potential_moves : list
+            A list of potential moves and barrier placements.
+        """
 
-        # Keep track of players locations and barrier locations
+        # Moves (Up, Right, Down, Left)
+        self.moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
 
-        # Check that players are not randomly positioned in same cell
-        if (my_pos[0] == adv_pos[1] and my_pos[1] == adv_pos[1]) :
+        potential_moves = []
+        board_size = chess_board.shape[0]
+        visited = set()
+        queue = [(start_pos, 0)]
+
+        while queue:
+            current_pos, steps = queue.pop(0)
+            if steps > max_step:
+                continue
+            visited.add(current_pos)
+
+            # Check for potential barrier placements at the current position
+            for dir in range(4):  # 0: up, 1: right, 2: down, 3: left
+                if not chess_board[current_pos[0], current_pos[1], dir]:
+                    potential_moves.append({'position': current_pos, 'direction': dir})
+
+            # Explore adjacent positions
+            for dx, dy in moves:  # up, right, down, left
+                next_pos = (current_pos[0] + dx, current_pos[1] + dy)
+
+                if 0 <= next_pos[0] < board_size and 0 <= next_pos[1] < board_size:
+                    if next_pos not in visited:
+                        queue.append((next_pos, steps + 1))
+
+        return potential_moves
+
+
+    def check_valid_step(self, start_pos, end_pos, barrier_dir):
+        """
+        Check if the step the agent takes is valid (reachable and within max steps).
+
+        Parameters
+        ----------
+        start_pos : tuple
+            The start position of the agent.
+        end_pos : np.ndarray
+            The end position of the agent.
+        barrier_dir : int
+            The direction of the barrier.
+        """
+        # Moves (Up, Right, Down, Left)
+        self.moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
+
+        # Endpoint already has barrier or is border
+        r, c = end_pos
+        if self.chess_board[r, c, barrier_dir]:
             return False
+        if np.array_equal(start_pos, end_pos):
+            return True
 
-        # BFS from world.py
+        # Get position of the adversary
+        adv_pos = self.p0_pos if self.turn else self.p1_pos
+
+        # BFS
         state_queue = [(start_pos, 0)]
         visited = {tuple(start_pos)}
         is_reached = False
@@ -104,12 +179,65 @@ class StudentAgent(Agent):
                 state_queue.append((next_pos, cur_step + 1))
 
         return is_reached
-
-
         
-    def is_barrier(self, chess_board, position):
-        x, y = position
-        return np.any(chess_board[x, y])
+    def is_barrier(self, cur_pos, chess_board, barrier_dir):
+        """
+        Check if there is a barrier in the specified direction from the current position.
+
+        Parameters
+        ----------
+        cur_pos : tuple
+            The current position of the agent (x, y).
+        chess_board : np.ndarray
+            The chess board state.
+        barrier_dir : int
+            The direction to check for a barrier (0: up, 1: right, 2: down, 3: left).
+
+        Returns
+        -------
+        bool
+            True if there is a barrier, False otherwise.
+        """
+        x, y = cur_pos
+        board_size = chess_board.shape[0]
+
+        # Check for barriers in each direction considering board boundaries
+        if barrier_dir == 0 and x > 0:  # Up
+            return chess_board[x, y, 0]
+        elif barrier_dir == 1 and y < board_size - 1:  # Right
+            return chess_board[x, y, 1]
+        elif barrier_dir == 2 and x < board_size - 1:  # Down
+            return chess_board[x, y, 2]
+        elif barrier_dir == 3 and y > 0:  # Left
+            return chess_board[x, y, 3]
+        return False  # If the direction is off the board, return False
+
+    def set_barrier(self, cur_pos, chess_board, barrier_dir):  # applies move on copy chessboard
+
+        # Moves (Up, Right, Down, Left)
+        # self.moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
+        chess_board[int(cur_pos[0])][int(cur_pos[1])][int(barrier_dir)] = True
+        if barrier_dir == 0:
+            chess_board[cur_pos[0] - 1, cur_pos[1], 2] = True  # go up a row and set down to true
+
+        elif barrier_dir == 1:
+            chess_board[cur_pos[0], cur_pos[1] + 1, 3] = True  # go right a position and set left true
+
+        elif barrier_dir == 2:
+            chess_board[cur_pos[0] + 1, cur_pos[1], 0] = True  # go down a position and set up true
+
+        elif barrier_dir == 3:
+            chess_board[cur_pos[0] - 1, cur_pos[1] - 1, 1] = True  # go left a position and set right true
+        return chess_board
+
+    """ From world.py
+    def set_barrier(self, r, c, dir):
+        # Set the barrier to True
+        self.chess_board[r, c, dir] = True
+        # Set the opposite barrier to True
+        move = self.moves[dir]
+        self.chess_board[r + move[0], c + move[1], self.opposites[dir]] = True
+    """
 
     def check_endgame(self, chess_board, p0_pos, p1_pos):
         """
