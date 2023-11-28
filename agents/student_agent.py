@@ -40,16 +40,6 @@ class StudentAgent(Agent):
 
         Please check the sample implementation in agents/random_agent.py or agents/human_agent.py for more details.
         """
-        # Taken for random_agent.py
-        def __init__(self):
-        super(HumanAgent, self).__init__()
-        self.name = "HumanAgent"
-        self.dir_map = {
-            "u": 0,
-            "r": 1,
-            "d": 2,
-            "l": 3,
-        }
 
         # Define moves (Up, Right, Down, Left)
         moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
@@ -57,13 +47,16 @@ class StudentAgent(Agent):
         # Some simple code to help you with timing. Consider checking 
         # time_taken during your search and breaking with the best answer
         # so far when it nears 2 seconds.
-        start_time = time.time()
+        #start_time = time.time()
 
 
         # Check that players are not randomly positioned in same cell
         # Only do at the very beginning, not before every step
-        if (my_pos[0] == adv_pos[1] and my_pos[1] == adv_pos[1]) :
-            return False
+        possible_positions = self.generate_potential_moves(my_pos, chess_board,
+                                      max_step)  
+
+        mini = self.minimax(0, possible_positions, my_pos, adv_pos, chess_board, max_step,
+                            True) 
 
         # logic goes here
         
@@ -73,12 +66,14 @@ class StudentAgent(Agent):
         # Check if game has ended with check_endgame
 
 
-        time_taken = time.time() - start_time
+        #time_taken = time.time() - start_time
         
-        print("My AI's turn took ", time_taken, "seconds.")
+        #print("My AI's turn took ", time_taken, "seconds.")
 
-        # dummy return
-        return my_pos, self.dir_map["u"]
+        
+        
+        return mini[0], int(mini[1])
+
 
     def generate_potential_moves(self, start_pos, chess_board, max_step):
         """
@@ -100,86 +95,37 @@ class StudentAgent(Agent):
         """
 
         # Moves (Up, Right, Down, Left)
-        self.moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
+        moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
 
         potential_moves = []
-        board_size = chess_board.shape[0]
-        visited = set()
+        visited = {tuple(start_pos)}
         queue = [(start_pos, 0)]
 
         while queue:
             current_pos, steps = queue.pop(0)
-            if steps > max_step:
-                continue
-            visited.add(current_pos)
+            cur_r, cur_c = current_pos
 
             # Check for potential barrier placements at the current position
-            for dir in range(4):  # 0: up, 1: right, 2: down, 3: left
-                if not chess_board[current_pos[0], current_pos[1], dir]:
-                    potential_moves.append({'position': current_pos, 'direction': dir})
+            for dir, move in enumerate(moves):
+                if not chess_board[cur_r][cur_c][dir]:
+                    potential_moves.append((current_pos, dir))
 
-            # Explore adjacent positions
-            for dx, dy in moves:  # up, right, down, left
-                next_pos = (current_pos[0] + dx, current_pos[1] + dy)
+            if steps < max_step:
+                # Explore adjacent positions
+                for move in moves:
+                    next_pos = (cur_r + move[0], cur_c + move[1])
 
-                if 0 <= next_pos[0] < board_size and 0 <= next_pos[1] < board_size:
-                    if next_pos not in visited:
-                        queue.append((next_pos, steps + 1))
+                    # Check for valid position within the board boundaries
+                    if 0 <= next_pos[0] < chess_board.shape[0] and 0 <= next_pos[1] < chess_board.shape[1]:
+                        if next_pos not in visited:
+                            visited.add(next_pos)
+                            queue.append((next_pos, steps + 1))
 
         return potential_moves
+    
+    
 
 
-    def check_valid_step(self, start_pos, end_pos, barrier_dir):
-        """
-        Check if the step the agent takes is valid (reachable and within max steps).
-
-        Parameters
-        ----------
-        start_pos : tuple
-            The start position of the agent.
-        end_pos : np.ndarray
-            The end position of the agent.
-        barrier_dir : int
-            The direction of the barrier.
-        """
-        # Moves (Up, Right, Down, Left)
-        self.moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
-
-        # Endpoint already has barrier or is border
-        r, c = end_pos
-        if self.chess_board[r, c, barrier_dir]:
-            return False
-        if np.array_equal(start_pos, end_pos):
-            return True
-
-        # Get position of the adversary
-        adv_pos = self.p0_pos if self.turn else self.p1_pos
-
-        # BFS
-        state_queue = [(start_pos, 0)]
-        visited = {tuple(start_pos)}
-        is_reached = False
-        while state_queue and not is_reached:
-            cur_pos, cur_step = state_queue.pop(0)
-            r, c = cur_pos
-            if cur_step == self.max_step:
-                break
-            for dir, move in enumerate(self.moves):
-                if self.chess_board[r, c, dir]:
-                    continue
-
-                next_pos = cur_pos + move
-                if np.array_equal(next_pos, adv_pos) or tuple(next_pos) in visited:
-                    continue
-                if np.array_equal(next_pos, end_pos):
-                    is_reached = True
-                    break
-
-                visited.add(tuple(next_pos))
-                state_queue.append((next_pos, cur_step + 1))
-
-        return is_reached
-        
     def is_barrier(self, cur_pos, chess_board, barrier_dir):
         """
         Check if there is a barrier in the specified direction from the current position.
@@ -309,5 +255,58 @@ class StudentAgent(Agent):
         else:
             logging.info("Game ends! It is a Tie!")
         return True, p0_score, p1_score
+
+    def minimax(self, depth, possible_moves, my_pos, adv_pos, chess_board, max_step, is_maximizing_player, alpha=float('-inf'), beta=float('inf')):
+        if depth == 0 or self.check_endgame(chess_board, my_pos, adv_pos):
+            return self.evaluate(chess_board, my_pos, adv_pos), None
+
+        if is_maximizing_player:
+            max_eval = float('-inf')
+            best_move = None
+            for move in possible_moves:
+                simulated_board = deepcopy(chess_board)
+                # Apply move on the simulated board
+                # You need to implement apply_move
+                self.apply_move(simulated_board, move)
+                eval = self.minimax(depth - 1, possible_moves, adv_pos, simulated_board, max_step, False, alpha, beta)[0]
+                if eval > max_eval:
+                    max_eval = eval
+                    best_move = move
+                alpha = max(alpha, eval)
+                if beta <= alpha:
+                    break
+            return max_eval, best_move
+        else:
+            min_eval = float('inf')
+            best_move = None
+            for move in possible_moves:
+                simulated_board = deepcopy(chess_board)
+                # Apply move on the simulated board
+                # You need to implement apply_move
+                self.apply_move(simulated_board, move)
+                eval = self.minimax(depth - 1, possible_moves, adv_pos, simulated_board, max_step, True, alpha, beta)[0]
+                if eval < min_eval:
+                    min_eval = eval
+                    best_move = move
+                beta = min(beta, eval)
+                if beta <= alpha:
+                    break
+            return min_eval, best_move
+
+    def evaluate(self, chess_board, my_pos, adv_pos):
+        # Maybe count number of squares on each side if game is over after this move?
+        pass
+
+    def apply_move(self, chess_board, move):
+        # Extract position and direction from the move
+        pos, dir = move
+
+        # Update the chess board with the barrier
+        self.set_barrier(pos, chess_board, dir)
+
+        # Update the position of your player
+        # Assuming 'move' also includes the next position of the player
+        # If not, you'll need to calculate it based on the current position and direction
+        self.my_pos = pos
 
 
