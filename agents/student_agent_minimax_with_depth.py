@@ -110,134 +110,49 @@ class StudentAgent(Agent):
 
         return False
 
-    def minimax(self, chess_board, depth, is_maximizing_player, my_pos, adv_pos, max_step, alpha, beta):
-
+    def minimax(self, chess_board, depth, is_maximizing_player, my_pos, adv_pos, max_step):
+        
         if depth == 0:
+            
             return self.evaluate(chess_board, my_pos, adv_pos)
 
         if is_maximizing_player:
+            # Maximizing player tries to maximize the score
             max_eval = float('-inf')
             for move in self.generate_moves(chess_board, my_pos, adv_pos, max_step):
-
-                new_pos, barrier_dir = move
-                r, c = new_pos
-
-                new_chess_board = deepcopy(chess_board)
-                new_chess_board[r, c, barrier_dir] = True
-
-                eval = self.minimax(new_chess_board, depth - 1, False, new_pos, adv_pos, max_step, alpha, beta)
+                new_pos, _ = move
+                eval = self.minimax(chess_board, depth - 1, False, new_pos, adv_pos, max_step)
                 max_eval = max(max_eval, eval)
-                alpha = max(alpha, max_eval)
-                if beta <= alpha:
-                    break
             return max_eval
         else:
+            # Minimizing player tries to minimize the score
             min_eval = float('inf')
             for move in self.generate_moves(chess_board, adv_pos, my_pos, max_step):
-                
-                new_pos, barrier_dir = move
-                r, c = new_pos
-                
-                new_chess_board = deepcopy(chess_board)
-                new_chess_board[r, c, barrier_dir] = True
-                
-                eval = self.minimax(new_chess_board, depth - 1, True, my_pos, new_pos, max_step, alpha, beta)
+                new_pos, _ = move
+                eval = self.minimax(chess_board, depth - 1, True, my_pos, new_pos, max_step)
                 min_eval = min(min_eval, eval)
-                beta = min(beta, min_eval)
-                if beta <= alpha:
-                    break
             return min_eval
 
     def step(self, chess_board, my_pos, adv_pos, max_step):
         best_move = None
         best_score = float('-inf')
-        depth = 0
-
-        alpha = float('-inf')
-        beta = float('inf')
+        depth = 2
 
         if chess_board.shape[0] < 8:
-            depth = 1
+            depth = 5
         elif chess_board.shape[0] >= 8 and chess_board.shape[0] <= 10:
-            depth = 1
+            depth = 4
         else:
-            depth = 1
+            depth = 3
 
         # Generate all possible moves and apply minimax
         for move in self.generate_moves(chess_board, my_pos, adv_pos, max_step):
-            score = self.minimax(chess_board, depth, True, my_pos, adv_pos, max_step, alpha, beta)
+            score = self.minimax(chess_board, depth, False, my_pos, adv_pos, max_step)
             if score > best_score:
                 best_score = score
                 best_move = move
 
         return best_move
-    
-    def generate_moves_2(self, chess_board, my_pos, adv_pos, max_step):
-
-        # Moves (Up, Right, Down, Left)
-        moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
-
-        possible_moves = []
-
-        # Generate all possible positions after moving up to max_step steps
-        for step in range(0, max_step + 1):
-            for move in moves:
-                new_r = my_pos[0] + move[0] * step
-                new_c = my_pos[1] + move[1] * step
-                if self.check_valid_step(my_pos, (new_r, new_c), adv_pos, moves.index(move), max_step, chess_board):
-                    possible_moves.append(((new_r, new_c), moves.index(move)))
-
-        return possible_moves
-    
-
-    def check_valid_step(self, start_pos, end_pos, adv_pos, barrier_dir, max_step, chess_board):
-        """
-        Check if the step the agent takes is valid (reachable and within max steps).
-
-        Parameters
-        ----------
-        start_pos : tuple
-            The start position of the agent.
-        end_pos : np.ndarray
-            The end position of the agent.
-        barrier_dir : int
-            The direction of the barrier.
-        """
-
-        # Moves (Up, Right, Down, Left)
-        moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
-
-        # Endpoint already has barrier or is border
-        r, c = end_pos
-        if chess_board[r, c, barrier_dir]:
-            return False
-        if np.array_equal(start_pos, end_pos):
-            return True
-
-        # BFS
-        state_queue = [(start_pos, 0)]
-        visited = {tuple(start_pos)}
-        is_reached = False
-        while state_queue and not is_reached:
-            cur_pos, cur_step = state_queue.pop(0)
-            r, c = cur_pos
-            if cur_step == max_step:
-                break
-            for dir, move in enumerate(moves):
-                if chess_board[r, c, dir]:
-                    continue
-
-                next_pos = cur_pos + move
-                if np.array_equal(next_pos, adv_pos) or tuple(next_pos) in visited:
-                    continue
-                if np.array_equal(next_pos, end_pos):
-                    is_reached = True
-                    break
-
-                visited.add(tuple(next_pos))
-                state_queue.append((next_pos, cur_step + 1))
-
-        return is_reached
     
     def generate_moves(self, chess_board, my_pos, adv_pos, max_step):
 
@@ -247,7 +162,7 @@ class StudentAgent(Agent):
         possible_moves = []
 
         # Generate all possible positions after moving up to max_step steps
-        for step in range(0, max_step + 1):
+        for step in range(1, max_step + 1):
             for move in moves:
                 new_r = my_pos[0] + move[0] * step
                 new_c = my_pos[1] + move[1] * step
