@@ -22,6 +22,12 @@ class StudentAgent(Agent):
             "l": 3,
         }
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # #                 START + MIDDLE GAME                          # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # #   heuristics function, implemented in evaluate() function    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # #                                                              # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
     def evaluate(self, chess_board, my_pos, my_dir, adv_pos):
         score = 0
 
@@ -189,62 +195,90 @@ class StudentAgent(Agent):
         return percentage_occupied >= end_game_threshold
     
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# # # # #                                                           # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # #                   ENDGAME LOGIC                           # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # # # # #   ab - pruning logic, implemented in minimax() function   # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # # # # #                                                           # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def minimax(self, chess_board, depth, is_maximizing_player, my_pos, adv_pos, max_step, alpha, beta):
     
+        # Check if the game has reached an end condition
         isEndGame, my_score, adv_score = self.check_endgame(chess_board, my_pos, adv_pos)
 
-        # Terminate if it's endgame or depth is 0
+        # If it's endgame or depth limit is reached, evaluate and return the score
         if isEndGame or depth == 0: 
+
+            # Maximizing player has a better score
             if my_score > adv_score:
                 return my_score, None
+            
+            # Minimizing player has a better score
             elif my_score < adv_score:
                 return -adv_score, None
+            
+            # Tie
             else:
                 return 0, None
 
+        # Maximizing player's turn
         if is_maximizing_player:
             max_eval = float('-inf')
             best_move = None
+
+            # Evaluate only top 3 possible move, to avoid timeout
             moves = self.generate_moves(chess_board, my_pos, adv_pos, max_step)
             for move in self.best_guess_moves(moves, adv_pos, chess_board):
                 new_pos, barrier_dir = move
                 new_chess_board = deepcopy(chess_board)
                 new_chess_board[new_pos[0], new_pos[1], barrier_dir] = True
 
+                # Recursively call minimax for the next level with updated board state
                 eval, _ = self.minimax(new_chess_board, depth - 1, False, new_pos, adv_pos, max_step, alpha, beta)
                 if eval > max_eval:
                     max_eval = eval
                     best_move = move
                 alpha = max(alpha, eval)
+
+                # Pruneing condition, prune the remaining branches
                 if beta <= alpha:
                     break
             return max_eval, best_move
+        
+        # Minimizing player's turn, same logic...
         else:
             min_eval = float('inf')
             best_move = None
+
+            # Evaluate only top 3 possible move, to avoid timeout
             moves = self.generate_moves(chess_board, adv_pos, my_pos, max_step)
             for move in self.best_guess_moves(moves, my_pos, chess_board):
                 new_pos, barrier_dir = move
                 new_chess_board = deepcopy(chess_board)
                 new_chess_board[new_pos[0], new_pos[1], barrier_dir] = True
 
+                # Recursively call minimax for the next level with updated board state
                 eval, _ = self.minimax(new_chess_board, depth - 1, True, my_pos, new_pos, max_step, alpha, beta)
                 if eval < min_eval:
                     min_eval = eval
                     best_move = move
                 beta = min(beta, eval)
+
+                # Pruneing condition, prune the remaining branches
                 if beta <= alpha:
                     break
             return min_eval, best_move
 
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # #                                                           # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # #           Step function and helper functions              # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # #                                                           # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
         
+
     def step(self, chess_board, my_pos, adv_pos, max_step):
 
+        # Determine if the game is in the endgame phase
         if self.is_end_game_start(chess_board):
             best_move = None
             depth = 0
@@ -252,6 +286,8 @@ class StudentAgent(Agent):
             alpha = float('-inf')
             beta = float('inf')
 
+            # Adjust the depth of the minimax search based on the size of the chess board
+            # Deeper search for smaller boards where computations are more manageable
             if chess_board.shape[0] < 8:
                 depth = 7
             elif chess_board.shape[0] >= 8 and chess_board.shape[0] <= 10:
@@ -259,20 +295,27 @@ class StudentAgent(Agent):
             else:
                 depth = 3
 
+            # Run the minimax algorithm to find the best move
             _, best_move = self.minimax(chess_board, depth, True, my_pos, adv_pos, max_step, alpha, beta)
+            
+            # Fallback to heuristic-based best move selection if minimax does not return a move
             if best_move is None:
                 moves = self.generate_moves(chess_board, my_pos, adv_pos, max_step)
                 best_moves = self.best_guess_moves(moves, adv_pos, chess_board)
                 best_move = best_moves[0]
 
             return best_move
+        
+        # For non-endgame scenarios, use a heuristic approach to select the best move
         else:
             moves = self.generate_moves(chess_board, my_pos, adv_pos, max_step)
             best_move = self.best_guess_moves(moves, adv_pos, chess_board)
 
+            # Return the top move from the best guesses
             return best_move[0]
         
 
+    # Return the top 3 move using the evaluation heuristic function
     def best_guess_moves(self, moves, adv_pos, chess_board):
         best_guess_moves_score = []
         for index, move in enumerate(moves):
@@ -291,7 +334,9 @@ class StudentAgent(Agent):
         return top_moves
         
     
+    # Get all possible moves from position (my_pos)
     def generate_moves(self, chess_board, my_pos, adv_pos, max_step):
+
         # Moves (Up, Right, Down, Left)
         moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
 
@@ -311,6 +356,7 @@ class StudentAgent(Agent):
 
                     # For each valid position, generate possible barrier placements
                     for dir in range(4):
+
                         # Check if it's possible to place a barrier in this direction
                         if not chess_board[new_r, new_c, dir]:
                             possible_moves.add(((new_r, new_c), dir))
@@ -318,6 +364,7 @@ class StudentAgent(Agent):
         return list(possible_moves)
 
 
+    # helper function to check if a path from start_pos to end_pos is viable
     def is_path_clear(self, chess_board, start_pos, end_pos, adv_pos, move, dir):
 
         # Check if the path from start_pos to end_pos is clear of barriers
@@ -334,18 +381,9 @@ class StudentAgent(Agent):
 
         return True
     
-
+    # helper function to find terminal node for minimax, recycled from end game function from world.py
     def check_endgame(self, chess_board, p0_pos, p1_pos):
-        """
-        ** edit end game function from world.py **
-        Check if the game ends.
-
-        Returns
-        -------
-        is_endgame : bool
-            Whether the game ends.
-        """
-
+        
         # Moves (Up, Right, Down, Left)
         moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
         board_size = chess_board.shape[0]
